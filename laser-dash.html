@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Laser Dash Pixel - Mobile</title>
+<style>
+  body {
+    margin: 0;
+    overflow: hidden;
+    font-family: sans-serif;
+    background-color: #000;
+    color: white;
+    text-align: center;
+  }
+  canvas {
+    display: block;
+    margin: 0 auto;
+  }
+
+  /* MENU */
+  #menu {
+    position: absolute;
+    top:0; left:0; width:100%; height:100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 2;
+  }
+  .btn {
+    width: 200px;
+    padding: 15px;
+    margin-top: 20px;
+    background-color: #4DFFFF;
+    color: #000;
+    font-size: 26px;
+    font-weight: bold;
+    border-radius: 12px;
+    user-select: none;
+    cursor: pointer;
+  }
+
+  /* TOUCHES MOBILE */
+  #mobileControls {
+    position: absolute;
+    bottom: 20px;
+    width: 100%;
+    display: none;
+    justify-content: space-around;
+    z-index: 3;
+  }
+  .touch-btn {
+    width: 90px;
+    height: 90px;
+    background-color: rgba(0,255,255,0.5);
+    border-radius: 20px;
+    text-align: center;
+    line-height: 90px;
+    font-size: 40px;
+    user-select: none;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gameCanvas" width="400" height="600"></canvas>
+
+<!-- MENU -->
+<div id="menu">
+  <h1 style="font-size:42px;">LASER<br>DASH PIXEL</h1>
+  <div id="playBtn" class="btn">PLAY</div>
+  <div id="highScoreDisplay" style="margin-top:15px; font-size:22px;">High Score: 0</div>
+</div>
+
+<!-- SCORE -->
+<div id="score" style="display:none; position:absolute; top:10px; left:50%; transform:translateX(-50%); font-size:24px;">Score: 0</div>
+
+<!-- TOUCHES MOBILE -->
+<div id="mobileControls">
+  <div id="leftBtn" class="touch-btn">&#8592;</div>
+  <div id="rightBtn" class="touch-btn">&#8594;</div>
+</div>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+const menu = document.getElementById("menu");
+const playBtn = document.getElementById("playBtn");
+const scoreTxt = document.getElementById("score");
+const mobileControls = document.getElementById("mobileControls");
+
+const leftBtn = document.getElementById("leftBtn");
+const rightBtn = document.getElementById("rightBtn");
+
+let player, lasers, score, gameOver;
+let moveLeft = false, moveRight = false;
+let laserSpeed, laserFrequency, frameCount;
+let highScore = 0;
+let stars = [];
+
+/* Charger high score depuis localStorage */
+if(localStorage.getItem("highScore")) {
+  highScore = parseInt(localStorage.getItem("highScore"));
+  document.getElementById("highScoreDisplay").innerText = "High Score: " + highScore;
+}
+
+/* Créer étoiles pour le fond animé */
+for(let i=0;i<150;i++){
+  stars.push({x:Math.random()*canvas.width, y:Math.random()*canvas.height, size:Math.random()*2+1, speed: Math.random()*1+0.5});
+}
+
+/* Touches tactiles */
+leftBtn.addEventListener("touchstart", ()=> moveLeft = true);
+leftBtn.addEventListener("touchend", ()=> moveLeft = false);
+rightBtn.addEventListener("touchstart", ()=> moveRight = true);
+rightBtn.addEventListener("touchend", ()=> moveRight = false);
+
+/* Lancer le jeu */
+playBtn.onclick = () => {
+  menu.style.display = "none";
+  scoreTxt.style.display = "block";
+  mobileControls.style.display = "flex";
+
+  startGame();
+};
+
+function startGame() {
+  player = { x: 180, y: 520, width: 30, height: 50, speed: 4, animFrame: 0 };
+  lasers = [];
+  score = 0;
+  frameCount = 0;
+  laserSpeed = 1.3;
+  laserFrequency = 110;
+  gameOver = false;
+
+  gameLoop();
+}
+
+function spawnLaser() {
+  const w = Math.random() * 70 + 20;
+  const x = Math.random() * (canvas.width - w);
+  const colors = ["#FF0000", "#FFAA00", "#00FFFF", "#FF00FF"];
+  lasers.push({ x, y: -20, width: w, height: 20, color: colors[Math.floor(Math.random()*colors.length)], trail: [] });
+}
+
+function update() {
+  // Déplacement du joueur
+  if (moveLeft) player.x -= player.speed;
+  if (moveRight) player.x += player.speed;
+
+  if (player.x < 0) player.x = 0;
+  if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+
+  // --- DIFFICULTÉ CONTINUE ---
+  laserSpeed = 1.3 + score * 0.002;
+  laserFrequency = Math.max(35, 110 - score * 0.1);
+
+  // Déplacement des lasers et trail
+  lasers.forEach(l => {
+    l.trail.push({x:l.x + l.width/2, y:l.y});
+    if(l.trail.length>10) l.trail.shift();
+    l.y += laserSpeed;
+  });
+
+  // Collision
+  lasers.forEach(l => {
+    if (
+      player.x < l.x + l.width &&
+      player.x + player.width > l.x &&
+      player.y < l.y + l.height &&
+      player.y + player.height > l.y
+    ) {
+      gameOver = true;
+      endGame();
+    }
+  });
+
+  lasers = lasers.filter(l => l.y < canvas.height);
+
+  // Score
+  score += 0.2;
+  scoreTxt.innerText = "Score: " + Math.floor(score);
+
+  // Animation joueur
+  player.animFrame += 0.2;
+}
+
+function draw() {
+  // Fond étoilé
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  stars.forEach(s=>{
+    s.y += s.speed;
+    if(s.y>canvas.height) s.y=0;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(s.x, s.y, s.size, s.size);
+  });
+
+  // Joueur animé
+  const af = Math.sin(player.animFrame)*3; // oscillation
+
+  // Jambes
+  ctx.fillStyle = "blue";
+  ctx.fillRect(player.x + 5, player.y + 40 + af, 10, 20);
+  ctx.fillRect(player.x + 15, player.y + 40 - af, 10, 20);
+
+  // Corps
+  ctx.fillStyle = "red";
+  ctx.fillRect(player.x, player.y + 20, 30, 20);
+
+  // Bras
+  ctx.fillStyle = "orange";
+  ctx.fillRect(player.x - 5, player.y + 20 + af, 10, 5);
+  ctx.fillRect(player.x + 25, player.y + 20 - af, 10, 5);
+
+  // Tête beige
+  ctx.fillStyle = "#f5d6b3";
+  ctx.fillRect(player.x + 5, player.y, 20, 20);
+
+  // Cheveux marron
+  ctx.fillStyle = "#6B3E26";
+  ctx.fillRect(player.x + 5, player.y, 20, 6); // bande supérieure pour cheveux
+
+  // Lasers avec trail
+  lasers.forEach(l => {
+    ctx.fillStyle = l.color;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = l.color;
+    ctx.fillRect(l.x, l.y, l.width, l.height);
+    l.trail.forEach((t,i)=>{
+      ctx.globalAlpha = i/10*0.5;
+      ctx.fillRect(t.x-2, t.y, 4, 10);
+    });
+    ctx.globalAlpha = 1;
+  });
+  ctx.shadowBlur = 0;
+}
+
+function gameLoop() {
+  if (!gameOver) {
+    frameCount++;
+    if (frameCount % Math.floor(laserFrequency) === 0) spawnLaser();
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+  }
+}
+
+function endGame() {
+  mobileControls.style.display = "none";
+
+  const finalScore = Math.floor(score);
+  if (finalScore > highScore) {
+    highScore = finalScore;
+    localStorage.setItem("highScore", highScore);
+  }
+  document.getElementById("highScoreDisplay").innerText =
+    "High Score: " + highScore;
+
+  setTimeout(() => {
+    menu.style.display = "flex";
+    scoreTxt.style.display = "none";
+  }, 700);
+}
+</script>
+</body>
+</html>
